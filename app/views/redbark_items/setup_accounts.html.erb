@@ -18,7 +18,7 @@
             ) %>
       <% end %>
 
-      <% if @unlinked_accounts.blank? %>
+      <% if @unlinked_accounts.blank? && @linked_accounts.blank? %>
         <div class="flex flex-col items-center justify-center py-6 space-y-3">
           <% if @api_error.blank? %>
             <%= icon "check-circle", size: "lg", class: "text-success" %>
@@ -26,7 +26,9 @@
           <% end %>
           <%= render DS::Link.new(text: t(".done"), variant: "primary", href: accounts_path, frame: "_top") %>
         </div>
-      <% else %>
+      <% end %>
+
+      <% if @unlinked_accounts.present? %>
         <%= form_with url: complete_account_setup_redbark_item_path(@redbark_item), method: :post, data: { turbo_frame: "_top" }, class: "space-y-6" do %>
           <div class="bg-surface border border-primary p-4 rounded-lg">
             <div class="flex items-start gap-3">
@@ -81,6 +83,45 @@
             ) %>
             <%= render DS::Link.new(text: t(".cancel"), variant: "secondary", href: accounts_path, frame: "_top") %>
           </div>
+        <% end %>
+      <% end %>
+
+      <% if @linked_accounts.present? %>
+        <%= render DS::Disclosure.new(variant: :card, open: @unlinked_accounts.blank?) do |disclosure| %>
+          <% disclosure.with_summary_content do %>
+            <p class="font-medium text-primary"><%= t(".refill_history_title") %></p>
+          <% end %>
+
+          <%= form_with url: refill_history_redbark_item_path(@redbark_item), method: :post, data: { turbo_frame: "_top" }, class: "space-y-4 mt-4" do %>
+            <p class="text-sm text-secondary"><%= t(".refill_history_help") %></p>
+
+            <div class="space-y-4 max-h-96 overflow-y-auto">
+              <% @linked_accounts.each do |redbark_account| %>
+                <div class="border border-primary rounded-lg p-4">
+                  <h4 class="font-medium text-primary"><%= redbark_account.name %></h4>
+
+                  <label class="block text-sm text-secondary mt-3 mb-1" for="refill_sync_start_date_<%= redbark_account.id %>">
+                    <%= t(".sync_start_date_label") %>
+                  </label>
+                  <%= date_field_tag "accounts[#{redbark_account.id}][sync_start_date]",
+                                      redbark_account.sync_start_date,
+                                      id: "refill_sync_start_date_#{redbark_account.id}",
+                                      min: RedbarkAccount::MAX_SYNC_START_DATE_LOOKBACK_DAYS.days.ago.to_date,
+                                      max: Date.current,
+                                      autocomplete: "off",
+                                      class: "bg-container border border-primary rounded px-2 py-1 text-sm text-primary w-full" %>
+                </div>
+              <% end %>
+            </div>
+
+            <%= render DS::Button.new(
+              text: t(".refill_history_button"),
+              variant: "secondary",
+              icon: "history",
+              type: "submit",
+              class: "w-full"
+            ) %>
+          <% end %>
         <% end %>
       <% end %>
     </div>

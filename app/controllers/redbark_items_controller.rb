@@ -3,8 +3,8 @@
 class RedbarkItemsController < ApplicationController
   ALLOWED_ACCOUNTABLE_TYPES = %w[Depository CreditCard Investment Loan OtherAsset OtherLiability Crypto Property Vehicle].freeze
 
-  before_action :set_redbark_item, only: [ :update, :destroy, :sync, :setup_accounts, :complete_account_setup ]
-  before_action :require_admin!, only: [ :create, :select_accounts, :select_existing_account, :link_existing_account, :update, :destroy, :sync, :setup_accounts, :complete_account_setup ]
+  before_action :set_redbark_item, only: [ :update, :destroy, :sync, :setup_accounts, :complete_account_setup, :refill_history ]
+  before_action :require_admin!, only: [ :create, :select_accounts, :select_existing_account, :link_existing_account, :update, :destroy, :sync, :setup_accounts, :complete_account_setup, :refill_history ]
 
   def create
     @redbark_item = Current.family.redbark_items.build(redbark_item_params)
@@ -126,8 +126,9 @@ class RedbarkItemsController < ApplicationController
     @api_error = fetch_redbark_accounts_from_api
 
     @unlinked_accounts = @redbark_item.unlinked_redbark_accounts.order(:name)
+    @linked_accounts = @redbark_item.linked_redbark_accounts.order(:name)
 
-    if @unlinked_accounts.empty? && @api_error.nil?
+    if @unlinked_accounts.empty? && @linked_accounts.empty? && @api_error.nil?
       redirect_to accounts_path, notice: t(".all_accounts_linked")
     end
   end
@@ -193,7 +194,66 @@ class RedbarkItemsController < ApplicationController
     end
   end
 
+  # Extends how far back an already-linked account's history reaches. Only
+  # rows whose submitted date actually differs from what's stored are
+  # refilled, so resubmitting the form (or submitting rows the user didn't
+  # touch) is a no-op rather than re-fetching history that's already there.
+  def refill_history
+    account_configs = params[:accounts] || {}
+
+    if account_configs.empty?
+      redirect_to setup_accounts_redbark_item_path(@redbark_item), alert: t(".no_accounts")
+      return
+    end
+
+    refilled_count = 0
+    failed_count = 0
+
+    account_configs.each do |redbark_account_id, config|
+      redbark_account = @redbark_item.redbark_accounts.find_by(id: redbark_account_id)
+      next unless redbark_account
+      next unless redbark_account.account_provider.present?
+
+      requested_date = parse_refill_date(config[:sync_start_date])
+      next if requested_date.nil? || requested_date == redbark_account.sync_start_date
+
+      begin
+        redbark_account.request_history_refill!(requested_date)
+        refilled_count += 1
+      rescue ActiveRecord::RecordInvalid, ArgumentError => e
+        DebugLogEntry.capture(
+          category: "provider_sync",
+          level: "error",
+          message: "Redbark history refill failed",
+          source: self.class.name,
+          provider_key: "redbark",
+          family: Current.family,
+          metadata: { redbark_account_id: redbark_account_id, error_class: e.class.name, error: e.message }
+        )
+        failed_count += 1
+      end
+    end
+
+    @redbark_item.sync_later if refilled_count > 0 && !@redbark_item.syncing?
+
+    if failed_count > 0
+      redirect_to setup_accounts_redbark_item_path(@redbark_item), alert: t(".refill_failed", count: failed_count)
+    elsif refilled_count > 0
+      redirect_to accounts_path, notice: t(".refill_success", count: refilled_count)
+    else
+      redirect_to setup_accounts_redbark_item_path(@redbark_item), alert: t(".no_changes")
+    end
+  end
+
   private
+
+    def parse_refill_date(value)
+      return nil if value.blank?
+
+      Date.parse(value)
+    rescue ArgumentError, TypeError
+      nil
+    end
 
     def set_redbark_item
       @redbark_item = Current.family.redbark_items.find(params[:id])

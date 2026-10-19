@@ -70,6 +70,7 @@ en:
       more_accounts_available:
         one: "%{count} more account available"
         other: "%{count} more accounts available"
+      manage_history: "Manage synced history"
       no_accounts_description: "This connection has no linked accounts yet."
       no_accounts_title: "No accounts"
       provider_name: "Redbark"
@@ -184,6 +185,9 @@ en:
       create_accounts: "Create Accounts"
       creating_accounts: "Creating Accounts..."
       historical_data_range: "Historical Data Range:"
+      refill_history_button: "Refill History"
+      refill_history_help: "Extend how far back an already-linked account's transaction history reaches. Only accounts whose date you change below will be re-fetched."
+      refill_history_title: "Manage synced history"
       subtitle: "Choose the correct account types for your imported accounts"
       sync_start_date_help: "Select how far back you want to sync transaction history."
       sync_start_date_label: "Start syncing transactions from:"
@@ -203,4 +207,11 @@ en:
       setup_failed: "%{count} account(s) could not be created. Nothing else was changed - fix the issue and try again."
       no_accounts: "No accounts to set up."
       success: "Successfully created %{count} account(s)."
+
+    # Refill history for already-linked accounts
+    refill_history:
+      no_accounts: "No accounts to refill."
+      no_changes: "No history range was changed."
+      refill_failed: "%{count} account(s) could not be updated. Nothing else was changed - fix the issue and try again."
+      refill_success: "Refilling history for %{count} account(s). This may take a few minutes."
 

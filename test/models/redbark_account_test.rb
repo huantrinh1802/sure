@@ -51,4 +51,38 @@ class RedbarkAccountTest < ActiveSupport::TestCase
     assert_not @redbark_account.valid?
     assert_includes @redbark_account.errors[:sync_start_date], "is not included in the list"
   end
+
+  test "request_history_refill! raises when the account isn't linked" do
+    assert_raises(ArgumentError) { @redbark_account.request_history_refill!(2.years.ago.to_date) }
+  end
+
+  test "request_history_refill! sets sync_start_date and clears the stored snapshot for a linked account" do
+    link_redbark_account!
+    @redbark_account.update!(raw_transactions_payload: [ { "id" => "tx_1" } ])
+    new_date = 5.years.ago.to_date
+
+    @redbark_account.request_history_refill!(new_date)
+
+    assert_equal new_date, @redbark_account.reload.sync_start_date
+    assert_nil @redbark_account.raw_transactions_payload
+  end
+
+  test "request_history_refill! raises on an out-of-range date without changing the account" do
+    link_redbark_account!
+    @redbark_account.update!(sync_start_date: 6.months.ago.to_date, raw_transactions_payload: [ { "id" => "tx_1" } ])
+    out_of_range_date = (RedbarkAccount::MAX_SYNC_START_DATE_LOOKBACK_DAYS + 1).days.ago.to_date
+
+    assert_raises(ActiveRecord::RecordInvalid) { @redbark_account.request_history_refill!(out_of_range_date) }
+
+    @redbark_account.reload
+    assert_equal 6.months.ago.to_date, @redbark_account.sync_start_date
+    assert_equal [ { "id" => "tx_1" } ], @redbark_account.raw_transactions_payload
+  end
+
+  private
+    def link_redbark_account!
+      family = @redbark_account.redbark_item.family
+      account = family.accounts.create!(name: "Linked Test Account", balance: 0, currency: "AUD", accountable: Depository.new)
+      @redbark_account.ensure_account_provider!(account)
+    end
 end

@@ -883,6 +883,7 @@ Rails.application.routes.draw do
       post :sync
       get :setup_accounts
       post :complete_account_setup
+      post :refill_history
     end
   end
 

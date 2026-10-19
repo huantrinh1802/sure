@@ -124,6 +124,16 @@
             <p class="text-primary font-medium text-sm"><%= t(".no_accounts_title") %></p>
             <p class="text-secondary text-sm"><%= t(".no_accounts_description") %></p>
           </div>
+        <% elsif redbark_item.linked_redbark_accounts.any? %>
+          <%# Fully set up - no accounts left to link, but history range is still adjustable %>
+          <div class="pt-2 border-t border-primary">
+            <%= link_to setup_accounts_redbark_item_path(redbark_item),
+                        data: { turbo_frame: :modal },
+                        class: "flex items-center gap-2 text-sm text-secondary hover:text-primary transition-colors" do %>
+              <%= icon "history", size: "sm" %>
+              <span><%= t(".manage_history") %></span>
+            <% end %>
+          </div>
         <% end %>
       </div>
     <% end %>

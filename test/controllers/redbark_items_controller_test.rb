@@ -156,4 +156,80 @@ class RedbarkItemsControllerTest < ActionDispatch::IntegrationTest
 
     assert_select "input#sync_start_date_#{@redbark_account.id}[value='#{stored_date}']"
   end
+
+  test "setup_accounts lists already-linked accounts in the refill history section" do
+    link_redbark_account!
+    stored_date = 6.months.ago.to_date
+    @redbark_account.update!(sync_start_date: stored_date)
+
+    get setup_accounts_redbark_item_url(@redbark_item)
+
+    assert_select "input#refill_sync_start_date_#{@redbark_account.id}[value='#{stored_date}']"
+  end
+
+  test "refill_history extends an already-linked account's history and triggers a sync" do
+    link_redbark_account!
+    @redbark_account.update!(sync_start_date: 6.months.ago.to_date, raw_transactions_payload: [ { "id" => "tx_1" } ])
+    RedbarkItem.any_instance.stubs(:syncing?).returns(false)
+    RedbarkItem.any_instance.expects(:sync_later).once
+    new_date = 3.years.ago.to_date
+
+    post refill_history_redbark_item_url(@redbark_item), params: {
+      accounts: { @redbark_account.id => { sync_start_date: new_date.to_s } }
+    }
+
+    @redbark_account.reload
+    assert_equal new_date, @redbark_account.sync_start_date
+    assert_nil @redbark_account.raw_transactions_payload
+    assert_redirected_to accounts_path
+  end
+
+  test "refill_history skips an account whose date did not change and does not sync" do
+    link_redbark_account!
+    stored_date = 6.months.ago.to_date
+    @redbark_account.update!(sync_start_date: stored_date, raw_transactions_payload: [ { "id" => "tx_1" } ])
+    RedbarkItem.any_instance.expects(:sync_later).never
+
+    post refill_history_redbark_item_url(@redbark_item), params: {
+      accounts: { @redbark_account.id => { sync_start_date: stored_date.to_s } }
+    }
+
+    @redbark_account.reload
+    assert_equal stored_date, @redbark_account.sync_start_date
+    assert_equal [ { "id" => "tx_1" } ], @redbark_account.raw_transactions_payload
+    assert_redirected_to setup_accounts_redbark_item_url(@redbark_item)
+  end
+
+  test "refill_history rejects an out-of-range date without changing the account" do
+    link_redbark_account!
+    stored_date = 6.months.ago.to_date
+    @redbark_account.update!(sync_start_date: stored_date, raw_transactions_payload: [ { "id" => "tx_1" } ])
+    out_of_range_date = (RedbarkAccount::MAX_SYNC_START_DATE_LOOKBACK_DAYS + 1).days.ago.to_date
+    RedbarkItem.any_instance.expects(:sync_later).never
+
+    post refill_history_redbark_item_url(@redbark_item), params: {
+      accounts: { @redbark_account.id => { sync_start_date: out_of_range_date.to_s } }
+    }
+
+    @redbark_account.reload
+    assert_equal stored_date, @redbark_account.sync_start_date
+    assert_equal [ { "id" => "tx_1" } ], @redbark_account.raw_transactions_payload
+    assert_redirected_to setup_accounts_redbark_item_url(@redbark_item)
+  end
+
+  test "refill_history ignores accounts that are not linked" do
+    RedbarkItem.any_instance.expects(:sync_later).never
+
+    post refill_history_redbark_item_url(@redbark_item), params: {
+      accounts: { @redbark_account.id => { sync_start_date: 3.years.ago.to_date.to_s } }
+    }
+
+    assert_nil @redbark_account.reload.sync_start_date
+  end
+
+  private
+    def link_redbark_account!
+      account = @family.accounts.create!(name: "Linked Test Account", balance: 0, currency: "AUD", accountable: Depository.new)
+      @redbark_account.ensure_account_provider!(account)
+    end
 end

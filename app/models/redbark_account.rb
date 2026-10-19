@@ -106,6 +106,23 @@ class RedbarkAccount < ApplicationRecord
     save!
   end
 
+  # Extends how far back this already-linked account's history reaches.
+  # sync_start_date only governs an account's *first* real fetch
+  # (RedbarkItem::Importer#calculate_transaction_start_date switches to a
+  # 7-day incremental window once any transactions are stored) - clearing
+  # raw_transactions_payload makes the next sync take that first-fetch branch
+  # again for this account. ProviderImportAdapter dedupes by external_id, so
+  # re-fetching a window that overlaps what's already imported is safe.
+  #
+  # Raises ActiveRecord::RecordInvalid if sync_start_date is out of range, or
+  # ArgumentError if the account isn't linked yet (use the normal setup flow
+  # for that).
+  def request_history_refill!(sync_start_date)
+    raise ArgumentError, "account must be linked before its history can be refilled" unless account_provider.present?
+
+    update!(sync_start_date: sync_start_date, raw_transactions_payload: nil)
+  end
+
   private
 
     def enqueue_connection_cleanup
