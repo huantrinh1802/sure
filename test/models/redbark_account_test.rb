@@ -1,0 +1,37 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+class RedbarkAccountTest < ActiveSupport::TestCase
+  setup do
+    @redbark_account = redbark_accounts(:savings_account)
+  end
+
+  test "sync_start_date allows nil" do
+    @redbark_account.sync_start_date = nil
+    assert @redbark_account.valid?
+  end
+
+  test "sync_start_date allows any date within the last two years" do
+    @redbark_account.sync_start_date = 6.months.ago.to_date
+    assert @redbark_account.valid?
+
+    @redbark_account.sync_start_date = Date.current
+    assert @redbark_account.valid?
+
+    @redbark_account.sync_start_date = 2.years.ago.to_date
+    assert @redbark_account.valid?
+  end
+
+  test "sync_start_date rejects a date older than two years" do
+    @redbark_account.sync_start_date = 2.years.ago.to_date - 1.day
+    assert_not @redbark_account.valid?
+    assert_includes @redbark_account.errors[:sync_start_date], "is not included in the list"
+  end
+
+  test "sync_start_date rejects a future date" do
+    @redbark_account.sync_start_date = 1.day.from_now.to_date
+    assert_not @redbark_account.valid?
+    assert_includes @redbark_account.errors[:sync_start_date], "is not included in the list"
+  end
+end

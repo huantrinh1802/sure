@@ -19,6 +19,9 @@ class RedbarkAccount < ApplicationRecord
 
   validates :name, :currency, :redbark_account_id, presence: true
   validates :redbark_account_id, uniqueness: { scope: :redbark_item_id }
+  validates :sync_start_date,
+    inclusion: { in: ->(_account) { 2.years.ago.to_date..Date.current } },
+    allow_nil: true
 
   # Scopes
   scope :with_linked, -> { joins(:account_provider) }
