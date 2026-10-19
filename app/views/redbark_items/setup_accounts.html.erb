@@ -62,7 +62,7 @@
                 <%= date_field_tag "accounts[#{redbark_account.id}][sync_start_date]",
                                     redbark_account.sync_start_date || 90.days.ago.to_date,
                                     id: "sync_start_date_#{redbark_account.id}",
-                                    min: 2.years.ago.to_date,
+                                    min: 7.years.ago.to_date,
                                     max: Date.current,
                                     autocomplete: "off",
                                     class: "bg-container border border-primary rounded px-2 py-1 text-sm text-primary w-full" %>

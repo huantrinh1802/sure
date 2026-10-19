@@ -136,7 +136,7 @@ class RedbarkItemsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "complete_account_setup rejects an out-of-range sync_start_date" do
-    out_of_range_date = 3.years.ago.to_date
+    out_of_range_date = 8.years.ago.to_date
 
     assert_no_difference "Account.count" do
       post complete_account_setup_redbark_item_url(@redbark_item), params: {

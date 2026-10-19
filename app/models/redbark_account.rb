@@ -19,8 +19,9 @@ class RedbarkAccount < ApplicationRecord
 
   validates :name, :currency, :redbark_account_id, presence: true
   validates :redbark_account_id, uniqueness: { scope: :redbark_item_id }
+  # Redbark can backfill up to 7 years of history.
   validates :sync_start_date,
-    inclusion: { in: ->(_account) { 2.years.ago.to_date..Date.current } },
+    inclusion: { in: ->(_account) { 7.years.ago.to_date..Date.current } },
     allow_nil: true
 
   # Scopes
