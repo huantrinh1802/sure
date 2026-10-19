@@ -29,9 +29,16 @@ class RedbarkAccount < ApplicationRecord
   # drift between our `Date.current` and Redbark's.
   MAX_SYNC_START_DATE_LOOKBACK_DAYS = 2550
 
+  # Scoped to the change itself: this is a rolling window, so a date that was
+  # valid when set drifts outside it over time. Without the guard, every
+  # unrelated update! (upsert_from_redbark! touching balance, name, currency
+  # on a routine sync) would re-validate the unchanged sync_start_date and
+  # start failing once enough time passed -- blocking updates that have
+  # nothing to do with it.
   validates :sync_start_date,
     inclusion: { in: ->(_account) { MAX_SYNC_START_DATE_LOOKBACK_DAYS.days.ago.to_date..Date.current } },
-    allow_nil: true
+    allow_nil: true,
+    if: :will_save_change_to_sync_start_date?
 
   # Scopes
   scope :with_linked, -> { joins(:account_provider) }

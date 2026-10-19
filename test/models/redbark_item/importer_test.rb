@@ -52,4 +52,34 @@ class RedbarkItem::ImporterTest < ActiveSupport::TestCase
 
     assert_equal %w[old_posted post_1], merged.map { |t| t["id"] }.sort
   end
+
+  test "calculate_transaction_start_date uses the stored sync_start_date when it's still within the lookback window" do
+    redbark_account = redbark_accounts(:savings_account)
+    redbark_account.update!(sync_start_date: 6.months.ago.to_date)
+
+    start_date = @importer.send(:calculate_transaction_start_date, redbark_account)
+
+    assert_equal 6.months.ago.to_date, start_date
+  end
+
+  test "calculate_transaction_start_date clamps an expired sync_start_date to the current max lookback" do
+    redbark_account = redbark_accounts(:savings_account)
+    # Bypass the model's own validation to simulate a date that was valid when
+    # set but has since drifted outside the rolling window by the time a
+    # delayed first fetch actually runs.
+    redbark_account.update_column(:sync_start_date, (RedbarkAccount::MAX_SYNC_START_DATE_LOOKBACK_DAYS + 50).days.ago.to_date)
+
+    start_date = @importer.send(:calculate_transaction_start_date, redbark_account)
+
+    assert_equal RedbarkAccount::MAX_SYNC_START_DATE_LOOKBACK_DAYS.days.ago.to_date, start_date
+  end
+
+  test "calculate_transaction_start_date falls back to 90 days when there's no stored date" do
+    redbark_account = redbark_accounts(:savings_account)
+    redbark_account.update!(sync_start_date: nil)
+
+    start_date = @importer.send(:calculate_transaction_start_date, redbark_account)
+
+    assert_equal 90.days.ago.to_date, start_date
+  end
 end

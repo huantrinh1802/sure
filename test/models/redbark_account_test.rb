@@ -34,4 +34,21 @@ class RedbarkAccountTest < ActiveSupport::TestCase
     assert_not @redbark_account.valid?
     assert_includes @redbark_account.errors[:sync_start_date], "is not included in the list"
   end
+
+  test "an unrelated update does not re-validate an unchanged, now-expired sync_start_date" do
+    # Bypasses validation on write, simulating a date that was valid when set
+    # but has since rolled outside the window - exactly what update_column
+    # (not update!) would leave behind if it had ever been written that way.
+    @redbark_account.update_column(:sync_start_date, (RedbarkAccount::MAX_SYNC_START_DATE_LOOKBACK_DAYS + 50).days.ago.to_date)
+
+    assert_nothing_raised { @redbark_account.update!(current_balance: 999) }
+  end
+
+  test "changing sync_start_date to an out-of-range value is still rejected" do
+    @redbark_account.update_column(:sync_start_date, 6.months.ago.to_date)
+
+    @redbark_account.sync_start_date = (RedbarkAccount::MAX_SYNC_START_DATE_LOOKBACK_DAYS + 1).days.ago.to_date
+    assert_not @redbark_account.valid?
+    assert_includes @redbark_account.errors[:sync_start_date], "is not included in the list"
+  end
 end
