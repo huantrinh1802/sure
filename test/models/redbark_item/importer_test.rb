@@ -82,4 +82,29 @@ class RedbarkItem::ImporterTest < ActiveSupport::TestCase
 
     assert_equal 90.days.ago.to_date, start_date
   end
+
+  test "import_transactions reloads the account so a concurrent history refill is picked up mid-sync" do
+    redbark_account = redbark_accounts(:savings_account)
+    redbark_account.update!(connection_id: "conn_1", sync_start_date: 6.months.ago.to_date, raw_transactions_payload: [ { "id" => "old" } ])
+
+    provider = mock("redbark_provider")
+    importer = RedbarkItem::Importer.new(@redbark_item, redbark_provider: provider)
+    importer.stubs(:transactable_connection?).returns(true)
+    importer.stubs(:connections_by_id).returns({})
+
+    # Simulate RedbarkAccount#request_history_refill! landing, via a separate
+    # in-memory copy, after the importer already loaded its account list but
+    # before this account's turn in the loop.
+    RedbarkAccount.find(redbark_account.id).update!(sync_start_date: 5.years.ago.to_date, raw_transactions_payload: nil)
+
+    provider.expects(:get_transactions).with(
+      connection_id: "conn_1",
+      account_id: redbark_account.redbark_account_id,
+      start_date: 5.years.ago.to_date,
+      end_date: Date.current,
+      include_pending: Rails.configuration.x.redbark.include_pending
+    ).returns([])
+
+    importer.send(:import_transactions, redbark_account)
+  end
 end

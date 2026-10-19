@@ -234,7 +234,15 @@ class RedbarkItemsController < ApplicationController
       end
     end
 
-    @redbark_item.sync_later if refilled_count > 0 && !@redbark_item.syncing?
+    # No `!syncing?` guard: sync_later's own dedup (reuse a visible sync,
+    # otherwise enqueue a fresh one) already handles the common cases
+    # correctly, and skipping the call outright when a sync happens to be
+    # active would just drop the refill silently. The one case dedup alone
+    # can't close -- a sync whose import loop has already passed this
+    # specific account in the SAME still-running pass -- is handled by
+    # RedbarkItem::Importer re-reading the account's current state right
+    # before choosing its fetch window (see calculate_transaction_start_date).
+    @redbark_item.sync_later if refilled_count > 0
 
     if failed_count > 0
       redirect_to setup_accounts_redbark_item_path(@redbark_item), alert: t(".refill_failed", count: failed_count)
@@ -247,10 +255,13 @@ class RedbarkItemsController < ApplicationController
 
   private
 
+    # The date_field_tag only ever submits ISO 8601 (YYYY-MM-DD). Date.parse
+    # is far more permissive -- it accepts things like "foo 12" as a date --
+    # which would let a crafted request smuggle an unintended value through.
     def parse_refill_date(value)
       return nil if value.blank?
 
-      Date.parse(value)
+      Date.iso8601(value.to_s)
     rescue ArgumentError, TypeError
       nil
     end

@@ -115,6 +115,15 @@ class RedbarkItem::Importer
     def import_transactions(redbark_account)
       Rails.logger.info "RedbarkItem::Importer - Fetching transactions for account #{redbark_account.id}"
 
+      # linked_accounts (loaded once, early in #import) can go stale if a
+      # concurrent request updates this specific account between that load
+      # and its turn in the loop -- e.g. RedbarkAccount#request_history_refill!
+      # resetting sync_start_date/raw_transactions_payload while a sync is
+      # already running. Reloading right before choosing the fetch window
+      # means whichever account state is current when we actually get here
+      # is what decides it, not a snapshot from the start of this sync.
+      redbark_account.reload
+
       if redbark_account.connection_id.blank?
         Rails.logger.warn "RedbarkItem::Importer - Account #{redbark_account.id} has no connection_id, skipping transactions"
         return
