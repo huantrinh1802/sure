@@ -227,6 +227,22 @@ class RedbarkItemsControllerTest < ActionDispatch::IntegrationTest
     assert_nil @redbark_account.reload.sync_start_date
   end
 
+  test "refill_history rejects a non-ISO date string instead of parsing it loosely" do
+    link_redbark_account!
+    stored_date = 6.months.ago.to_date
+    @redbark_account.update!(sync_start_date: stored_date, raw_transactions_payload: [ { "id" => "tx_1" } ])
+    RedbarkItem.any_instance.expects(:sync_later).never
+
+    post refill_history_redbark_item_url(@redbark_item), params: {
+      accounts: { @redbark_account.id => { sync_start_date: "foo 12" } }
+    }
+
+    @redbark_account.reload
+    assert_equal stored_date, @redbark_account.sync_start_date
+    assert_equal [ { "id" => "tx_1" } ], @redbark_account.raw_transactions_payload
+    assert_redirected_to setup_accounts_redbark_item_url(@redbark_item)
+  end
+
   private
     def link_redbark_account!
       account = @family.accounts.create!(name: "Linked Test Account", balance: 0, currency: "AUD", accountable: Depository.new)
