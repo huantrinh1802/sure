@@ -19,9 +19,18 @@ class RedbarkAccount < ApplicationRecord
 
   validates :name, :currency, :redbark_account_id, presence: true
   validates :redbark_account_id, uniqueness: { scope: :redbark_item_id }
-  # Redbark can backfill up to 7 years of history.
+  # Redbark rejects a `from` date 2555+ days back ("too far in the past -
+  # banking providers serve at most ~7 years of history"), confirmed
+  # empirically against the live API. That's a flat 7 * 365 day count with no
+  # leap-day adjustment, so `7.years.ago` (which Rails computes against actual
+  # calendar years, landing past 2555 days whenever a leap day falls in the
+  # range) is rejected every time. MAX_SYNC_START_DATE_LOOKBACK_DAYS stays a
+  # few days inside that boundary as margin against timezone/day-of-fetch
+  # drift between our `Date.current` and Redbark's.
+  MAX_SYNC_START_DATE_LOOKBACK_DAYS = 2550
+
   validates :sync_start_date,
-    inclusion: { in: ->(_account) { 7.years.ago.to_date..Date.current } },
+    inclusion: { in: ->(_account) { MAX_SYNC_START_DATE_LOOKBACK_DAYS.days.ago.to_date..Date.current } },
     allow_nil: true
 
   # Scopes
